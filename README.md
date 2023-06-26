@@ -3,7 +3,7 @@ This repository includes an Infrastructure as Code (IaC) to perform batch proces
 
 ## Installing and Running LocalStack
 
-LocalStack provides an easy-to-use test and development environment for AWS cloud resources on your local machine. In this guide (for `bash`), you'll help how to install and run LocalStack.
+LocalStack provides an easy-to-use testing and development environment for AWS cloud resources on your local machine. This guide (for `bash`) will help you install and run LocalStack.
 
 ### Prerequisites
 
