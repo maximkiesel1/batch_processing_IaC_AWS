@@ -19,8 +19,9 @@ If you don't have Docker installed, follow the installation instructions for you
 
 1. Install LocalStack using pip:
 
+```
 pip install localstack
-
+```
 
 ### Running LocalStack
 
@@ -28,11 +29,9 @@ pip install localstack
 
 ```
 localstack start
+```
 
 This command downloads the LocalStack Docker image (if not already present on your system) and starts a new LocalStack container with the default services.
 
-After installing and starting LocalStack, you can use and test various AWS services provided by LocalStack. For more information and documentation on LocalStack, visit https://github.com/localstack/localstack.
-yaml
+After installing and starting LocalStack, you can use and test various AWS services provided by LocalStack.
 
-
----
