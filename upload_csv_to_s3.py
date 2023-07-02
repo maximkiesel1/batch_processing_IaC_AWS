@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 
 s3_client = boto3.client('s3')
 
+
 # Function to upload the latest CSV file from a folder to an S3 bucket
 def data_ingestion(folder_path, s3_bucket_name):
     csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
@@ -33,6 +34,7 @@ def data_ingestion(folder_path, s3_bucket_name):
             print(f"Error uploading latest CSV file {local_csv_path} to S3 bucket {s3_bucket_name}: {e}")
     else:
         print("No valid CSV files found in the folder")
+
 
 # Upload the latest local CSV file to the input S3 bucket
 data_ingestion('/Users/maximkiesel/batch_processing_IaC_AWS/data/', 'data-ingestion-bucket')
