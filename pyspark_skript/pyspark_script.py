@@ -1,21 +1,56 @@
+import sys
+import re
+from datetime import datetime
+import boto3
+from awsglue.utils import getResolvedOptions
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, posexplode, expr,when
+from pyspark.sql.functions import col, posexplode, expr, when
 
-# Start PySpark session
-spark = SparkSession.builder \
-    .appName("CSV Transformation") \
-    .master("local[*]") \
-    .config("spark.driver.memory", "12g") \
-    .config("spark.executor.memory", "8g") \
-    .config("spark.sql.shuffle.partitions", "200") \
-    .getOrCreate()
+# Get the Glue job arguments
+args = getResolvedOptions(sys.argv, ['S3_BUCKET_SOURCE', 'S3_BUCKET_TARGET'])
 
-# Read the data
-df = spark.read.csv(
-    '/Users/maximkiesel/batch_processing_IaC_AWS/data/20230703_measurement_data.csv',
-    header=True,
-    inferSchema=True
-)
+# Initialize the S3 client
+s3_client = boto3.client('s3',
+                         region_name="eu-north-1"
+                         )
+
+# List CSV files in the source bucket
+source_bucket_path = f's3://{args["S3_BUCKET_SOURCE"]}'
+paginator = s3_client.get_paginator('list_objects_v2')
+pages = paginator.paginate(Bucket=args["S3_BUCKET_SOURCE"], Prefix='')
+
+csv_files = []
+for page in pages:
+    for obj in page['Contents']:
+        if obj['Key'].endswith('.csv'):
+            csv_files.append(f's3://{args["S3_BUCKET_SOURCE"]}/{obj["Key"]}')
+
+# Get the latest CSV file based on the date in the filename
+latest_date = None
+latest_csv_file = None
+
+for csv_file in csv_files:
+    date_match = re.search(r'(\d{8})', csv_file)
+    if date_match:
+        date_str = date_match.group(1)
+        try:
+            file_date = datetime.strptime(date_str, '%Y%m%d')
+            if not latest_date or file_date > latest_date:
+                latest_date = file_date
+                latest_csv_file = csv_file
+        except ValueError:
+            print(f"Invalid date format in CSV file {csv_file}")
+
+# Read the data from the latest CSV file
+if latest_csv_file:
+    df = spark.read.csv(
+        latest_csv_file,
+        header=True,
+        inferSchema=True
+    )
+else:
+    print("No valid CSV files found in the bucket")
+
 
 # sorting the data by 'start_time' ascending
 sorted_df = df.orderBy(col("start_time").asc())
@@ -71,3 +106,9 @@ columns_to_drop = [
     "exploded_timestamps"
 ]
 df_extracted = df_extracted.drop(*columns_to_drop)
+
+df_extracted.write.csv(
+    f's3://{args["S3_BUCKET_TARGET"]}',
+    mode='overwrite',
+    header=True
+)

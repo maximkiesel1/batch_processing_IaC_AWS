@@ -4,7 +4,11 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 
-s3_client = boto3.client('s3')
+s3_client = boto3.client('s3',
+                         region_name="eu-north-1"
+                         )
+
+
 
 
 # Function to upload the latest CSV file from a folder to an S3 bucket

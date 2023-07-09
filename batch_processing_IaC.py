@@ -3,28 +3,45 @@ import boto3
 from botocore.exceptions import ClientError
 
 # Create an S3 client
-s3_client = boto3.client('s3')
+s3_client = boto3.client('s3',
+                         region_name="eu-north-1"
+                         )
 
 # Create an IAM client
-iam_client = boto3.client('iam')
+iam_client = boto3.client('iam',
+                          region_name="eu-north-1"
+                          )
 
 # Create a Glue client
-glue_client = boto3.client('glue')
+glue_client = boto3.client('glue',
+                           region_name="eu-north-1"
+                           )
 
 # Create a Step Functions client
-step_functions_client = boto3.client('stepfunctions')
+step_functions_client = boto3.client('stepfunctions',
+                                     region_name="eu-north-1"
+                                     )
 
 # Create a CloudWatch Events client
-events_client = boto3.client('events')
+events_client = boto3.client('events',
+                             region_name="eu-north-1"
+                             )
 
 # Create an AWS KMS client
-kms_client = boto3.client('kms')
+kms_client = boto3.client('kms',
+                          region_name="eu-north-1"
+                          )
 
 
 # Function to create an S3 bucket
 def create_s3_bucket(bucket_name):
     try:
-        s3_client.create_bucket(Bucket=bucket_name)
+        s3_client.create_bucket(
+            Bucket=bucket_name,
+            CreateBucketConfiguration={
+                'LocationConstraint': 'eu-north-1'
+            }
+        )
         print(f"S3 bucket {bucket_name} created successfully")
     except ClientError as e:
         print(f"Error creating S3 bucket {bucket_name}: {e}")
@@ -80,7 +97,7 @@ def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucke
 
 
 # Create a state machine for AWS Step Functions
-def create_state_machine(state_machine_name, role_arn, glue_job_name, lambda_function_arn):
+def create_state_machine(state_machine_name, role_arn, glue_job_name):
     try:
         response = step_functions_client.create_state_machine(
             name=state_machine_name,
@@ -127,9 +144,9 @@ def create_cloudwatch_events_rule(rule_name, state_machine_arn):
 
 
 # Create S3 buckets
-create_s3_bucket('data-ingestion-bucket')
-create_s3_bucket('pyspark-skript-bucket')
-create_s3_bucket('processing-bucket')
+create_s3_bucket('data-ingestion-bucket-kiesel')
+create_s3_bucket('pyspark-skript-bucket-kiesel')
+create_s3_bucket('processing-bucket-kiesel')
 
 
 # Create an IAM role for AWS Glue
