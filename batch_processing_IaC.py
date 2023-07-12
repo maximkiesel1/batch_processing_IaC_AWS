@@ -62,8 +62,8 @@ def does_s3_bucket_exist(bucket_name):
             raise e
 
 
-# Create an IAM role for AWS Glue
-def create_glue_role(role_name, policy_arn):
+# Create an IAM role for AWS Glue and attach the S3 access policy
+def create_glue_role(role_name, s3_policy_arn):
     role_arn = does_iam_role_exist(role_name)
     if not role_arn:
         try:
@@ -80,7 +80,7 @@ def create_glue_role(role_name, policy_arn):
                     ]
                 }""",
             )
-            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
+            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=s3_policy_arn)
             print(f"IAM role {role_name} created successfully")
             return response['Role']['Arn']
         except ClientError as e:
@@ -90,7 +90,7 @@ def create_glue_role(role_name, policy_arn):
         return role_arn
 
 
-# Function to check if there is an exisiting IAM role
+# Function to check if there is an existing IAM role
 def does_iam_role_exist(role_name):
     try:
         response = iam_client.get_role(RoleName=role_name)
@@ -100,6 +100,50 @@ def does_iam_role_exist(role_name):
             return None
         else:
             raise e
+
+
+# Function to check if an S3 access policy exists
+def does_s3_policy_exist(policy_name):
+    try:
+        response = iam_client.get_policy(PolicyArn=f"arn:aws:iam::{iam_client.get_user()['User']['Arn'].split(':')[4]}:policy/{policy_name}")
+        return response['Policy']['Arn']
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchEntity':
+            return None
+        else:
+            raise e
+
+
+def create_s3_access_policy(policy_name, bucket_names):
+    bucket_resources = []
+    for bucket_name in bucket_names:
+        bucket_resources.append(f"arn:aws:s3:::{bucket_name}/*")
+        bucket_resources.append(f"arn:aws:s3:::{bucket_name}")
+
+    policy_document = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:ListBucket"
+                ],
+                "Resource": bucket_resources
+            }
+        ]
+    }
+
+    try:
+        response = iam_client.create_policy(
+            PolicyName=policy_name,
+            PolicyDocument=json.dumps(policy_document)
+        )
+        return response['Policy']['Arn']
+    except ClientError as e:
+        print(f"Error creating policy {policy_name}: {e}")
+        return None
 
 
 # Create an AWS Glue job
@@ -224,14 +268,29 @@ create_s3_bucket('data-ingestion-bucket-kiesel')
 create_s3_bucket('pyspark-skript-bucket-kiesel')
 create_s3_bucket('processing-bucket-kiesel')
 
+# Check if the S3 access policy exists, otherwise create one
+s3_policy_name = 'S3AccessPolicy'
+bucket_names = [
+    'data-ingestion-bucket-kiesel',
+    'pyspark-skript-bucket-kiesel',
+    'processing-bucket-kiesel'
+]
+s3_policy_arn = does_s3_policy_exist(s3_policy_name)
+if not s3_policy_arn:
+    s3_policy_arn = create_s3_access_policy(s3_policy_name, bucket_names)
+
 # Create an IAM role for CloudWatch Events
 cloudwatch_events_role_arn = create_glue_role(
     'cloudwatch-events-processing-role',
     'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess'
 )
 
-# Create an IAM role for AWS Glue
-glue_role_arn = create_glue_role('glue_job_role', 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole')
+# Create an IAM role for AWS Glue and attach the S3 access policy
+glue_role_name = 'glue_job_role_with_s3_access'
+if s3_policy_arn:
+    glue_role_arn = create_glue_role(glue_role_name, s3_policy_arn)
+else:
+    print("Failed to create or find the S3 access policy.")
 
 # Create an AWS Glue job
 glue_job = create_glue_job(
@@ -248,12 +307,6 @@ step_functions_role_arn = create_glue_role(
     'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
 )
 
-# Create a state machine for AWS Step Functions
-#state_machine_arn = create_state_machine(
- #   'processing-step-functions',
-#    step_functions_role_arn,
- #   glue_job_name
-#)
 
 state_machine_name = "processing-step-functions"
 role_arn = step_functions_role_arn
