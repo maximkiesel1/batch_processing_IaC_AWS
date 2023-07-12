@@ -41,4 +41,4 @@ def data_ingestion(folder_path, s3_bucket_name):
 
 
 # Upload the latest local CSV file to the input S3 bucket
-data_ingestion('/Users/maximkiesel/batch_processing_IaC_AWS/data/', 'data-ingestion-bucket')
+data_ingestion('/Users/maximkiesel/batch_processing_IaC_AWS/data/', 'data-ingestion-bucket-kiesel')

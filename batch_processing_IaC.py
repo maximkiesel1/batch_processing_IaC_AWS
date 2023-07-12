@@ -35,92 +35,153 @@ kms_client = boto3.client('kms',
 
 # Function to create an S3 bucket
 def create_s3_bucket(bucket_name):
+    if not does_s3_bucket_exist(bucket_name):
+        try:
+            s3_client.create_bucket(
+                Bucket=bucket_name,
+                CreateBucketConfiguration={
+                    'LocationConstraint': 'eu-north-1'
+                }
+            )
+            print(f"S3 bucket {bucket_name} created successfully")
+        except ClientError as e:
+            print(f"Error creating S3 bucket {bucket_name}: {e}")
+    else:
+        print(f"S3 bucket {bucket_name} already exists")
+
+
+# Function to check if there is an exisiting s3
+def does_s3_bucket_exist(bucket_name):
     try:
-        s3_client.create_bucket(
-            Bucket=bucket_name,
-            CreateBucketConfiguration={
-                'LocationConstraint': 'eu-north-1'
-            }
-        )
-        print(f"S3 bucket {bucket_name} created successfully")
+        s3_client.head_bucket(Bucket=bucket_name)
+        return True
     except ClientError as e:
-        print(f"Error creating S3 bucket {bucket_name}: {e}")
+        if e.response['Error']['Code'] == '404':
+            return False
+        else:
+            raise e
 
 
 # Create an IAM role for AWS Glue
 def create_glue_role(role_name, policy_arn):
+    role_arn = does_iam_role_exist(role_name)
+    if not role_arn:
+        try:
+            response = iam_client.create_role(
+                RoleName=role_name,
+                AssumeRolePolicyDocument="""{
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {"Service": "glue.amazonaws.com"},
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                }""",
+            )
+            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
+            print(f"IAM role {role_name} created successfully")
+            return response['Role']['Arn']
+        except ClientError as e:
+            print(f"Error creating IAM role {role_name}: {e}")
+    else:
+        print(f"IAM role {role_name} already exists")
+        return role_arn
+
+
+# Function to check if there is an exisiting IAM role
+def does_iam_role_exist(role_name):
     try:
-        response = iam_client.create_role(
-            RoleName=role_name,
-            AssumeRolePolicyDocument="""{
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {"Service": "glue.amazonaws.com"},
-                        "Action": "sts:AssumeRole"
-                    }
-                ]
-            }""",
-        )
-        iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
-        print(f"IAM role {role_name} created successfully")
+        response = iam_client.get_role(RoleName=role_name)
         return response['Role']['Arn']
     except ClientError as e:
-        print(f"Error creating IAM role {role_name}: {e}")
+        if e.response['Error']['Code'] == 'NoSuchEntity':
+            return None
+        else:
+            raise e
 
 
 # Create an AWS Glue job
 def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucket):
+    glue_job = get_glue_job(job_name)
+    if not glue_job:
+        try:
+            response = glue_client.create_job(
+                Name=job_name,
+                Role=role_arn,
+                Command={
+                    'Name': 'glueetl',
+                    'ScriptLocation': script_path,
+                    'PythonVersion': '3'
+                },
+                DefaultArguments={
+                    '--job-bookmark-option': 'job-bookmark-enable',
+                    '--S3_BUCKET_SOURCE': source_bucket,
+                    '--S3_BUCKET_TARGET': target_bucket
+                },
+                GlueVersion='2.0',
+                MaxRetries=0,
+                Timeout=2880
+            )
+            print(f"Glue job {job_name} created successfully")
+            return response['Name']
+        except ClientError as e:
+            print(f"Error creating Glue job {job_name}: {e}")
+    else:
+        print(f"Glue job {job_name} already exists")
+        return glue_job['Name']
+
+
+# Function to check if there is an exisiting glue job
+def get_glue_job(job_name):
     try:
-        response = glue_client.create_job(
-            Name=job_name,
-            Role=role_arn,
-            Command={
-                'Name': 'glueetl',
-                'ScriptLocation': script_path,
-                'PythonVersion': '3'
-            },
-            DefaultArguments={
-                '--job-bookmark-option': 'job-bookmark-enable',
-                '--S3_BUCKET_SOURCE': source_bucket,
-                '--S3_BUCKET_TARGET': target_bucket
-            },
-            GlueVersion='2.0',
-            MaxRetries=0,
-            Timeout=2880
-        )
-        print(f"Glue job {job_name} created successfully")
-        return response['Name']
+        response = glue_client.get_job(JobName=job_name)
+        return response['Job']
     except ClientError as e:
-        print(f"Error creating Glue job {job_name}: {e}")
+        if e.response['Error']['Code'] == 'EntityNotFoundException':
+            return None
+        else:
+            raise e
 
 
 # Create a state machine for AWS Step Functions
-def create_state_machine(state_machine_name, role_arn, glue_job_name):
-    try:
-        response = step_functions_client.create_state_machine(
-            name=state_machine_name,
-            definition=json.dumps({
-                "StartAt": "Run Glue Job",
-                "States": {
-                    "Run Glue Job": {
-                        "Type": "Task",
-                        "Resource": "arn:aws:states:::glue:startJobRun.sync",
-                        "Parameters": {
-                            "JobName": glue_job_name
-                        },
-                        "End": True
-                    }
+def create_state_machine(state_machine_name, role_arn, definition):
+    state_machine = get_state_machine(state_machine_name)
+    if not state_machine:
+        try:
+            response = step_functions_client.create_state_machine(
+                name=state_machine_name,
+                definition=definition,
+                roleArn=role_arn,
+                type='STANDARD',
+                loggingConfiguration={
+                    'level': 'OFF',
+                    'includeExecutionData': False,
+                    'destinations': []
                 }
-            }),
-            roleArn=role_arn,
-            type='STANDARD'
-        )
-        print(f"State machine {state_machine_name} created successfully")
-        return response['stateMachineArn']
+            )
+            print(f"State machine {state_machine_name} created successfully")
+            return response['stateMachineArn']
+        except ClientError as e:
+            print(f"Error creating state machine {state_machine_name}: {e}")
+            return None
+    else:
+        print(f"State machine {state_machine_name} already exists")
+        return state_machine['stateMachineArn']
+
+
+# Function to get a state machine
+def get_state_machine(state_machine_name):
+    try:
+        state_machines = step_functions_client.list_state_machines()['stateMachines']
+        for state_machine in state_machines:
+            if state_machine_name in state_machine['name']:
+                return state_machine
+        return None
     except ClientError as e:
-        print(f"Error creating state machine {state_machine_name}: {e}")
+        print(f"Error retrieving state machine {state_machine_name}: {e}")
+        return None
 
 
 # Create a CloudWatch Events rule to trigger the state machine execution monthly
@@ -129,16 +190,31 @@ def create_cloudwatch_events_rule(rule_name, state_machine_arn):
         response = events_client.put_rule(
             Name=rule_name,
             ScheduleExpression='cron(0 0 1 * ? *)',
-            State='ENABLED',
+            State='ENABLED'
+        )
+        rule_arn = response['RuleArn']
+        print(f"CloudWatch Events rule {rule_name} created successfully")
+
+        # Erstellen Sie eine IAM-Rolle für CloudWatch Events
+        cloudwatch_events_role_arn = create_glue_role(
+            'cloudwatch-events-processing-role',
+            'arn:aws:iam::aws:policy/service-role/AWS_Events_Invoke_Step_Functions_FullAccess'
+        )
+
+        # Fügen Sie die State Machine als Ziel für die Regel hinzu
+        events_client.put_targets(
+            Rule=rule_name,
             Targets=[
                 {
                     'Id': '1',
-                    'Arn': state_machine_arn
+                    'Arn': state_machine_arn,
+                    'RoleArn': cloudwatch_events_role_arn
                 }
             ]
         )
-        print(f"CloudWatch Events rule {rule_name} created successfully")
-        return response['RuleArn']
+        print(f"State machine {state_machine_arn} added as a target for the rule {rule_name}")
+
+        return rule_arn
     except ClientError as e:
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
 
@@ -148,17 +224,22 @@ create_s3_bucket('data-ingestion-bucket-kiesel')
 create_s3_bucket('pyspark-skript-bucket-kiesel')
 create_s3_bucket('processing-bucket-kiesel')
 
+# Create an IAM role for CloudWatch Events
+cloudwatch_events_role_arn = create_glue_role(
+    'cloudwatch-events-processing-role',
+    'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess'
+)
 
 # Create an IAM role for AWS Glue
 glue_role_arn = create_glue_role('glue_job_role', 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole')
 
 # Create an AWS Glue job
-glue_job_name = create_glue_job(
+glue_job = create_glue_job(
     'processing-job',
     glue_role_arn,
-    's3://pyspark-skript-bucket/pyspark_timeseries_transformation.py',
-    's3://data-ingestion-bucket',
-    's3://processing-bucket'
+    's3://pyspark-skript-bucket-kiesel/pyspark_script.py',
+    'data-ingestion-bucket-kiesel',
+    'processing-bucket-kiesel'
 )
 
 # Create an IAM role for AWS Step Functions
@@ -168,11 +249,31 @@ step_functions_role_arn = create_glue_role(
 )
 
 # Create a state machine for AWS Step Functions
-state_machine_arn = create_state_machine(
-    'processing-step-functions',
-    step_functions_role_arn,
-    glue_job_name
-)
+#state_machine_arn = create_state_machine(
+ #   'processing-step-functions',
+#    step_functions_role_arn,
+ #   glue_job_name
+#)
+
+state_machine_name = "processing-step-functions"
+role_arn = step_functions_role_arn
+definition = """
+{
+  "StartAt": "StartGlueJob",
+  "States": {
+    "StartGlueJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "processing-job"
+      },
+      "End": true
+    }
+  }
+}
+"""
+
+state_machine_arn = create_state_machine(state_machine_name, role_arn, definition)
 
 # Create a CloudWatch Events rule to trigger the state machine execution monthly
 create_cloudwatch_events_rule(
