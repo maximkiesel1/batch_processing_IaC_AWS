@@ -50,16 +50,20 @@ def create_s3_bucket(bucket_name):
         print(f"S3 bucket {bucket_name} already exists")
 
 
-# Function to check if there is an exisiting s3
+# Function to check if there is an existing s3
 def does_s3_bucket_exist(bucket_name):
+    s3_client = boto3.client('s3')
     try:
         s3_client.head_bucket(Bucket=bucket_name)
-        return True
     except ClientError as e:
-        if e.response['Error']['Code'] == '404':
+        error_code = e.response['Error']['Code']
+        if error_code == '404':
             return False
+        elif error_code == '403':
+            raise Exception(f'Forbidden access to bucket: {bucket_name}. Check AWS permissions and bucket policies.')
         else:
-            raise e
+            raise
+    return True
 
 
 # Create an IAM role for AWS Glue and attach the S3 access policy
@@ -81,6 +85,25 @@ def create_glue_role(role_name, s3_policy_arn):
                 }""",
             )
             iam_client.attach_role_policy(RoleName=role_name, PolicyArn=s3_policy_arn)
+
+            # Attach the CloudWatch logs policy to the role
+            logging_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                        "Resource": "arn:aws:logs:*:*:*"
+                    }
+                ]
+            }
+
+            iam_client.put_role_policy(
+                RoleName=role_name,
+                PolicyName='LoggingToCloudWatch',
+                PolicyDocument=json.dumps(logging_policy)
+            )
+
             print(f"IAM role {role_name} created successfully")
             return response['Role']['Arn']
         except ClientError as e:
@@ -263,10 +286,14 @@ def create_cloudwatch_events_rule(rule_name, state_machine_arn):
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
 
 
+
+
+
 # Create S3 buckets
 create_s3_bucket('data-ingestion-bucket-kiesel')
 create_s3_bucket('pyspark-skript-bucket-kiesel')
 create_s3_bucket('processing-bucket-kiesel')
+
 
 # Check if the S3 access policy exists, otherwise create one
 s3_policy_name = 'S3AccessPolicy'
@@ -275,6 +302,7 @@ bucket_names = [
     'pyspark-skript-bucket-kiesel',
     'processing-bucket-kiesel'
 ]
+
 s3_policy_arn = does_s3_policy_exist(s3_policy_name)
 if not s3_policy_arn:
     s3_policy_arn = create_s3_access_policy(s3_policy_name, bucket_names)

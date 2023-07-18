@@ -5,9 +5,19 @@ import boto3
 from awsglue.utils import getResolvedOptions
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, posexplode, expr, when
+from pyspark.sql.functions import unix_timestamp
+from pyspark.sql.functions import from_unixtime
+
+
+spark = SparkSession.builder \
+    .appName("batch-processing") \
+    .getOrCreate()
 
 # Get the Glue job arguments
 args = getResolvedOptions(sys.argv, ['S3_BUCKET_SOURCE', 'S3_BUCKET_TARGET'])
+
+print(f'S3_BUCKET_SOURCE: {args["S3_BUCKET_SOURCE"]}')
+print(f'S3_BUCKET_TARGET: {args["S3_BUCKET_TARGET"]}')
 
 # Initialize the S3 client
 s3_client = boto3.client('s3',
@@ -18,6 +28,8 @@ s3_client = boto3.client('s3',
 source_bucket_path = f's3://{args["S3_BUCKET_SOURCE"]}'
 paginator = s3_client.get_paginator('list_objects_v2')
 pages = paginator.paginate(Bucket=args["S3_BUCKET_SOURCE"], Prefix='')
+
+df = spark.read.csv(f"s3://{args['S3_BUCKET_SOURCE']}/20230703_measurement_data.csv", header=True, inferSchema=True)
 
 csv_files = []
 for page in pages:
@@ -34,8 +46,8 @@ for csv_file in csv_files:
     if date_match:
         date_str = date_match.group(1)
         try:
-            file_date = datetime.strptime(date_str, '%Y%m%d')
-            if not latest_date or file_date > latest_date:
+           file_date = datetime.strptime(date_str, '%Y%m%d')
+           if not latest_date or file_date > latest_date:
                 latest_date = file_date
                 latest_csv_file = csv_file
         except ValueError:
@@ -59,8 +71,11 @@ sorted_df = df.orderBy(col("start_time").asc())
 sorted_df = sorted_df.withColumn(
     "timedelta_per_sample",
     when(col("samples").isNotNull() & (col("samples") != 0),
-         (col("end_time") - col("start_time")) / col("samples")).otherwise(expr("INTERVAL 0 SECONDS"))
+         (unix_timestamp(col("end_time")) - unix_timestamp(col("start_time"))) / col("samples")).otherwise(0)
 )
+
+
+
 
 # Generate an array of integers from 0 to the maximum number of samples minus 1
 df_expanded = sorted_df.withColumn(
@@ -72,14 +87,16 @@ df_expanded = sorted_df.withColumn(
 df_expanded = df_expanded.withColumn(
     "expanded_rows",
     expr(
-        """
+        f"""
         transform(idx_array, idx -> struct(
-            start_time + idx * timedelta_per_sample AS start_time,
-            start_time + (idx + 1) * timedelta_per_sample AS end_time
+            from_unixtime(unix_timestamp(start_time) + idx * timedelta_per_sample) AS start_time,
+            from_unixtime(unix_timestamp(start_time) + (idx + 1) * timedelta_per_sample) AS end_time
         ))
         """
     )
 )
+
+
 
 # Drop the idx_array column
 df_expanded = df_expanded.drop("idx_array")
@@ -108,7 +125,7 @@ columns_to_drop = [
 df_extracted = df_extracted.drop(*columns_to_drop)
 
 df_extracted.write.csv(
-    f's3://{args["S3_BUCKET_TARGET"]}',
-    mode='overwrite',
+    f"s3://{args['S3_BUCKET_SOURCE']}/output/",
+    mode='append',
     header=True
 )
