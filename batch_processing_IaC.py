@@ -1,6 +1,7 @@
 import json
 import boto3
 from botocore.exceptions import ClientError
+import subprocess
 
 # Create an S3 client
 s3_client = boto3.client('s3',
@@ -67,26 +68,26 @@ def does_s3_bucket_exist(bucket_name):
 
 
 # Create an IAM role for AWS Glue and attach the S3 access policy
-def create_glue_role(role_name, s3_policy_arn):
+def create_glue_role(role_name, s3_policy_arn, service):
     role_arn = does_iam_role_exist(role_name)
     if not role_arn:
         try:
+            trust_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Service": service},
+                        "Action": "sts:AssumeRole"
+                    }
+                ]
+            }
             response = iam_client.create_role(
                 RoleName=role_name,
-                AssumeRolePolicyDocument="""{
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {"Service": "glue.amazonaws.com"},
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                }""",
+                AssumeRolePolicyDocument=json.dumps(trust_policy),
             )
             iam_client.attach_role_policy(RoleName=role_name, PolicyArn=s3_policy_arn)
 
-            # Attach the CloudWatch logs policy to the role
             logging_policy = {
                 "Version": "2012-10-17",
                 "Statement": [
@@ -137,6 +138,7 @@ def does_s3_policy_exist(policy_name):
             raise e
 
 
+# create s3 access policy
 def create_s3_access_policy(policy_name, bucket_names):
     bucket_resources = []
     for bucket_name in bucket_names:
@@ -251,24 +253,56 @@ def get_state_machine(state_machine_name):
         return None
 
 
+# Function to add inline policy to a role
+def add_inline_policy_to_role(role_name, policy_name, policy_document):
+    try:
+        response = iam_client.put_role_policy(
+            RoleName=role_name,
+            PolicyName=policy_name,
+            PolicyDocument=json.dumps(policy_document)
+        )
+        print(f"Inline policy {policy_name} added to role {role_name} successfully")
+    except ClientError as e:
+        print(f"Error adding inline policy {policy_name} to role {role_name}: {e}")
+
+
 # Create a CloudWatch Events rule to trigger the state machine execution monthly
 def create_cloudwatch_events_rule(rule_name, state_machine_arn):
     try:
+        # Create or update a CloudWatch Events rule with a cron schedule expression
+        # This rule triggers every month
         response = events_client.put_rule(
             Name=rule_name,
             ScheduleExpression='cron(0 0 1 * ? *)',
             State='ENABLED'
         )
+        # Extract the ARN of the created rule
         rule_arn = response['RuleArn']
         print(f"CloudWatch Events rule {rule_name} created successfully")
 
-        # Erstellen Sie eine IAM-Rolle für CloudWatch Events
+        # Create an IAM role for CloudWatch Events
         cloudwatch_events_role_arn = create_glue_role(
             'cloudwatch-events-processing-role',
-            'arn:aws:iam::aws:policy/service-role/AWS_Events_Invoke_Step_Functions_FullAccess'
+            'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess',
+            'events.amazonaws.com'
         )
 
-        # Fügen Sie die State Machine als Ziel für die Regel hinzu
+        # Add inline policy to the role that allows it to start executions of the state machine
+        policy_name = 'StartExecutionPolicy'
+        policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "states:StartExecution",
+                    "Resource": state_machine_arn  # The ARN of the state machine
+                }
+            ]
+        }
+        add_inline_policy_to_role('cloudwatch-events-processing-role', policy_name, policy_document)
+
+        # Add the State Machine as a target for the rule
+        # This means every time the rule triggers, it will start an execution of the state machine
         events_client.put_targets(
             Rule=rule_name,
             Targets=[
@@ -281,19 +315,115 @@ def create_cloudwatch_events_rule(rule_name, state_machine_arn):
         )
         print(f"State machine {state_machine_arn} added as a target for the rule {rule_name}")
 
+        # Return the ARN of the created rule
         return rule_arn
     except ClientError as e:
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
 
+def create_cloudwatch_events_rule_5(rule_name, state_machine_arn):
+    try:
+        # Create or update a CloudWatch Events rule with a cron schedule expression
+        # This rule triggers every 5 minutes
+        response = events_client.put_rule(
+            Name=rule_name,
+            ScheduleExpression='rate(5 minutes)',
+            State='ENABLED'
+        )
+        # Extract the ARN of the created rule
+        rule_arn = response['RuleArn']
+        print(f"CloudWatch Events rule {rule_name} created successfully")
 
+        # Create an IAM role for CloudWatch Events
+        cloudwatch_events_role_arn = create_glue_role(
+            'cloudwatch-events-processing-role',
+            'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess',
+            'events.amazonaws.com'
+        )
+
+        # Add inline policy to the role that allows it to start executions of the state machine
+        policy_name = 'StartExecutionPolicy'
+        policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "states:StartExecution",
+                    "Resource": state_machine_arn  # The ARN of the state machine
+                }
+            ]
+        }
+        add_inline_policy_to_role('cloudwatch-events-processing-role', policy_name, policy_document)
+
+        # Add the State Machine as a target for the rule
+        # This means every time the rule triggers, it will start an execution of the state machine
+        events_client.put_targets(
+            Rule=rule_name,
+            Targets=[
+                {
+                    'Id': '1',
+                    'Arn': state_machine_arn,
+                    'RoleArn': cloudwatch_events_role_arn
+                }
+            ]
+        )
+        print(f"State machine {state_machine_arn} added as a target for the rule {rule_name}")
+
+        # Return the ARN of the created rule
+        return rule_arn
+    except ClientError as e:
+        print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
+
+def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_arn):
+    role_arn = does_iam_role_exist(role_name)
+    if not role_arn:
+        try:
+            trust_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Service": service},
+                        "Action": "sts:AssumeRole"
+                    }
+                ]
+            }
+            response = iam_client.create_role(
+                RoleName=role_name,
+                AssumeRolePolicyDocument=json.dumps(trust_policy),
+            )
+            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
+
+            execution_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "states:StartExecution",
+                        "Resource": state_machine_arn
+                    }
+                ]
+            }
+
+            iam_client.put_role_policy(
+                RoleName=role_name,
+                PolicyName='StartExecutionToStepFunctions',
+                PolicyDocument=json.dumps(execution_policy)
+            )
+
+            print(f"IAM-Rolle {role_name} erfolgreich erstellt")
+            return response['Role']['Arn']
+        except ClientError as e:
+            print(f"Fehler beim Erstellen der IAM-Rolle {role_name}: {e}")
+    else:
+        print(f"IAM-Rolle {role_name} existiert bereits")
+        return role_arn
 
 
 
 # Create S3 buckets
-create_s3_bucket('data-ingestion-bucket-kiesel')
-create_s3_bucket('pyspark-skript-bucket-kiesel')
-create_s3_bucket('processing-bucket-kiesel')
-
+create_s3_bucket('data-ingestion-bucket-kiesel')  # Bucket for data ingestion
+create_s3_bucket('pyspark-skript-bucket-kiesel')  # Bucket for PySpark script
+create_s3_bucket('processing-bucket-kiesel')  # Bucket for processing
 
 # Check if the S3 access policy exists, otherwise create one
 s3_policy_name = 'S3AccessPolicy'
@@ -303,20 +433,15 @@ bucket_names = [
     'processing-bucket-kiesel'
 ]
 
+# Check if the S3 policy exists, if not create one
 s3_policy_arn = does_s3_policy_exist(s3_policy_name)
 if not s3_policy_arn:
     s3_policy_arn = create_s3_access_policy(s3_policy_name, bucket_names)
 
-# Create an IAM role for CloudWatch Events
-cloudwatch_events_role_arn = create_glue_role(
-    'cloudwatch-events-processing-role',
-    'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess'
-)
-
 # Create an IAM role for AWS Glue and attach the S3 access policy
 glue_role_name = 'glue_job_role_with_s3_access'
 if s3_policy_arn:
-    glue_role_arn = create_glue_role(glue_role_name, s3_policy_arn)
+    glue_role_arn = create_glue_role(glue_role_name, s3_policy_arn, "glue.amazonaws.com")
 else:
     print("Failed to create or find the S3 access policy.")
 
@@ -330,12 +455,11 @@ glue_job = create_glue_job(
 )
 
 # Create an IAM role for AWS Step Functions
-step_functions_role_arn = create_glue_role(
-    'processing-step-functions-role',
-    'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
-)
+step_functions_role_name = 'processing-step-functions-role'
+step_functions_policy_arn = 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
+step_functions_role_arn = create_glue_role(step_functions_role_name, step_functions_policy_arn, "states.amazonaws.com")
 
-
+# Create state machine
 state_machine_name = "processing-step-functions"
 role_arn = step_functions_role_arn
 definition = """
@@ -354,10 +478,33 @@ definition = """
 }
 """
 
+# Call the function to create the state machine
 state_machine_arn = create_state_machine(state_machine_name, role_arn, definition)
 
-# Create a CloudWatch Events rule to trigger the state machine execution monthly
-create_cloudwatch_events_rule(
-    'monthly-update-cloudwatch-events-rule',
-    state_machine_arn
+# Create an IAM role for CloudWatch Events
+cloudwatch_events_role_arn = create_cloudwatch_events_role(
+    'cloudwatch-events-processing-role',
+    'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess',
+    'events.amazonaws.com',
+    state_machine_arn  # Pass the ARN of the state machine to the function
 )
+
+# Add inline policy to the role that allows it to start executions of the state machine
+policy_name = 'StartExecutionPolicy'
+policy_document = {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "states:StartExecution",
+            "Resource": state_machine_arn  # The ARN of the state machine
+        }
+    ]
+}
+add_inline_policy_to_role('cloudwatch-events-processing-role', policy_name, policy_document)
+
+# Define CloudWatch rule name
+rule_name = "monthly-update-cloudwatch-events-rule"
+
+# Create or update the CloudWatch event rule
+create_cloudwatch_events_rule_5(rule_name, state_machine_arn)
