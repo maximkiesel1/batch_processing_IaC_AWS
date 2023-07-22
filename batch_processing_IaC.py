@@ -1,7 +1,7 @@
 import json
 import boto3
 from botocore.exceptions import ClientError
-import subprocess
+
 
 # Create an S3 client
 s3_client = boto3.client('s3',
@@ -320,6 +320,8 @@ def create_cloudwatch_events_rule(rule_name, state_machine_arn):
     except ClientError as e:
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
 
+
+# Create cloudwatch event rule clocked in 5 minutes for testing
 def create_cloudwatch_events_rule_5(rule_name, state_machine_arn):
     try:
         # Create or update a CloudWatch Events rule with a cron schedule expression
@@ -373,6 +375,8 @@ def create_cloudwatch_events_rule_5(rule_name, state_machine_arn):
     except ClientError as e:
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
 
+
+# create cloudwatch event role
 def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_arn):
     role_arn = does_iam_role_exist(role_name)
     if not role_arn:
@@ -417,7 +421,6 @@ def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_
     else:
         print(f"IAM-Rolle {role_name} existiert bereits")
         return role_arn
-
 
 
 # Create S3 buckets
