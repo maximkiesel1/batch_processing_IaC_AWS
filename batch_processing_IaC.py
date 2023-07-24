@@ -34,21 +34,78 @@ kms_client = boto3.client('kms',
                           )
 
 
-# Function to create an S3 bucket
-def create_s3_bucket(bucket_name):
-    if not does_s3_bucket_exist(bucket_name):
-        try:
-            s3_client.create_bucket(
-                Bucket=bucket_name,
-                CreateBucketConfiguration={
-                    'LocationConstraint': 'eu-north-1'
-                }
-            )
-            print(f"S3 bucket {bucket_name} created successfully")
-        except ClientError as e:
-            print(f"Error creating S3 bucket {bucket_name}: {e}")
-    else:
-        print(f"S3 bucket {bucket_name} already exists")
+# Create a KMS encryption
+def create_kms_key(description):
+    try:
+        response = kms_client.create_key(
+            Description=description,
+            KeyUsage='ENCRYPT_DECRYPT',
+            Origin='AWS_KMS',
+            BypassPolicyLockoutSafetyCheck=False
+        )
+        return response['KeyMetadata']['Arn']  # Return the ARN of the key
+    except Exception as e:
+        print(f"Error creating KMS key: {e}")
+        return None
+
+
+# Function to attach kms policy
+def attach_kms_policy_to_role(role_name, kms_key_arn):
+    policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ],
+                "Resource": kms_key_arn
+            }
+        ]
+    }
+    try:
+        response = iam_client.put_role_policy(
+            RoleName=role_name,
+            PolicyName='AllowUseOfKMSKey',
+            PolicyDocument=json.dumps(policy)
+        )
+    except ClientError as e:
+        print(f"Error attaching KMS policy to role {role_name}: {e}")
+
+
+
+# Function to create an S3 bucket with kms encryption
+def create_s3_bucket(bucket_name, kms_key_id):
+    try:
+        s3_client.create_bucket(
+            Bucket=bucket_name,
+            CreateBucketConfiguration={
+                'LocationConstraint': 'eu-north-1'
+            }
+        )
+        print(f"S3 bucket {bucket_name} created successfully")
+
+        # Activate a kms encryption
+        s3_client.put_bucket_encryption(
+            Bucket=bucket_name,
+            ServerSideEncryptionConfiguration={
+                'Rules': [
+                    {
+                        'ApplyServerSideEncryptionByDefault': {
+                            'SSEAlgorithm': 'aws:kms',
+                            'KMSMasterKeyID': kms_key_id
+                        },
+                    },
+                ]
+            }
+        )
+        print(f"Server-side encryption enabled on {bucket_name} with KMS key {kms_key_id}")
+    except ClientError as e:
+        print(f"Error: {e}")
 
 
 # Function to check if there is an existing s3
@@ -114,6 +171,29 @@ def create_glue_role(role_name, s3_policy_arn, service):
         return role_arn
 
 
+def create_glue_security_configuration(security_configuration_name, kms_key_arn):
+    try:
+        response = glue_client.create_security_configuration(
+            Name=security_configuration_name,
+            EncryptionConfiguration={
+                'S3Encryption': [{
+                    'S3EncryptionMode': 'SSE-KMS',
+                    'KmsKeyArn': kms_key_arn
+                }],
+                'CloudWatchEncryption': {
+                    'CloudWatchEncryptionMode': 'DISABLED'
+                },
+                'JobBookmarksEncryption': {
+                    'JobBookmarksEncryptionMode': 'DISABLED'
+                }
+            }
+        )
+        print(f"Glue security configuration {security_configuration_name} created successfully")
+        return response['Name']
+    except ClientError as e:
+        print(f"Error creating Glue security configuration {security_configuration_name}: {e}")
+
+
 # Function to check if there is an existing IAM role
 def does_iam_role_exist(role_name):
     try:
@@ -171,8 +251,8 @@ def create_s3_access_policy(policy_name, bucket_names):
         return None
 
 
-# Create an AWS Glue job
-def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucket):
+# Create a Glue job with KMS encryption
+def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucket, security_configuration_name):
     glue_job = get_glue_job(job_name)
     if not glue_job:
         try:
@@ -191,7 +271,9 @@ def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucke
                 },
                 GlueVersion='2.0',
                 MaxRetries=0,
-                Timeout=2880
+                Timeout=2880,
+                # Add security configuration
+                SecurityConfiguration=security_configuration_name  # Use the name of the security configuration
             )
             print(f"Glue job {job_name} created successfully")
             return response['Name']
@@ -200,6 +282,7 @@ def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucke
     else:
         print(f"Glue job {job_name} already exists")
         return glue_job['Name']
+
 
 
 # Function to check if there is an exisiting glue job
@@ -423,10 +506,17 @@ def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_
         return role_arn
 
 
+# Create KMS id
+kms_key_description = 'kms-key-batch-processing'
+kms_key_arn = create_kms_key(kms_key_description)
+
+security_configuration_name = "GlueSecurityConfiguration"
+create_glue_security_configuration(security_configuration_name, kms_key_arn)
+
 # Create S3 buckets
-create_s3_bucket('data-ingestion-bucket-kiesel')  # Bucket for data ingestion
-create_s3_bucket('pyspark-skript-bucket-kiesel')  # Bucket for PySpark script
-create_s3_bucket('processing-bucket-kiesel')  # Bucket for processing
+create_s3_bucket('data-ingestion-bucket-kiesel', kms_key_arn)  # Bucket for data ingestion
+create_s3_bucket('pyspark-skript-bucket-kiesel', kms_key_arn)  # Bucket for PySpark script
+create_s3_bucket('processing-bucket-kiesel', kms_key_arn)  # Bucket for processing
 
 # Check if the S3 access policy exists, otherwise create one
 s3_policy_name = 'S3AccessPolicy'
@@ -448,14 +538,16 @@ if s3_policy_arn:
 else:
     print("Failed to create or find the S3 access policy.")
 
+attach_kms_policy_to_role(glue_role_name, kms_key_arn)
+
 # Create an AWS Glue job
-glue_job = create_glue_job(
+create_glue_job(
     'processing-job',
     glue_role_arn,
     's3://pyspark-skript-bucket-kiesel/pyspark_script.py',
     'data-ingestion-bucket-kiesel',
-    'processing-bucket-kiesel'
-)
+    'processing-bucket-kiesel',
+    security_configuration_name)
 
 # Create an IAM role for AWS Step Functions
 step_functions_role_name = 'processing-step-functions-role'
@@ -483,6 +575,7 @@ definition = """
 
 # Call the function to create the state machine
 state_machine_arn = create_state_machine(state_machine_name, role_arn, definition)
+attach_kms_policy_to_role(step_functions_role_name, kms_key_arn)
 
 # Create an IAM role for CloudWatch Events
 cloudwatch_events_role_arn = create_cloudwatch_events_role(
@@ -491,6 +584,8 @@ cloudwatch_events_role_arn = create_cloudwatch_events_role(
     'events.amazonaws.com',
     state_machine_arn  # Pass the ARN of the state machine to the function
 )
+
+attach_kms_policy_to_role('cloudwatch-events-processing-role', kms_key_arn)
 
 # Add inline policy to the role that allows it to start executions of the state machine
 policy_name = 'StartExecutionPolicy'
@@ -507,7 +602,9 @@ policy_document = {
 add_inline_policy_to_role('cloudwatch-events-processing-role', policy_name, policy_document)
 
 # Define CloudWatch rule name
+rule_name_5 = "5min-update-cloudwatch-events-rule"
 rule_name = "monthly-update-cloudwatch-events-rule"
 
 # Create or update the CloudWatch event rule
-create_cloudwatch_events_rule_5(rule_name, state_machine_arn)
+create_cloudwatch_events_rule_5(rule_name_5, state_machine_arn)
+create_cloudwatch_events_rule(rule_name, state_machine_arn)
