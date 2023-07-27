@@ -1,25 +1,25 @@
 # batch_processing_IaC_AWS
 This repository includes an Infrastructure as Code (IaC) to perform batch processing of big data.
 
-### Scheduling a Python Script Execution Using a Bash Script and Cron
+### Scheduling a Upload Script for S3 Execution Using a Bash Script and Cron
 
-1. Firstly, create a bash file that runs your Python script, for instance, name it `run_python_script.sh`:
+1. Firstly, create a bash file that runs the script:
 
    ```bash
    #!/bin/bash
-   /usr/bin/python3 /path/to/your/python/script.py
+   /usr/bin/python3 /path/to/your/python/script/upload_csv_to_s3.py
    
-Please replace /path/to/your/python/script.py with the exact path to your Python file.
+Please replace /path/to/your/python/script with the exact path to the upload python file.
 
 2. Make the bash file executable:
 
    ```bash
-    chmod +x /path/to/run_python_script.sh
+    chmod +x /path/to/your/python/script/upload_csv_to_s3.py
    
 3. Configure cron to execute this bash file periodically. Open the crontab configuration with crontab -e and add a new line:
 
    ```bash
-    0 0 1 * * /path/to/run_python_script.sh
+    0 0 1 * * /path/to/your/python/script/upload_csv_to_s3.py
    
 This line schedules your script to run at 0:00 on the first day of every month. 
 

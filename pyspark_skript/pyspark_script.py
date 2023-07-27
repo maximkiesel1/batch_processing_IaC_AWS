@@ -123,6 +123,7 @@ columns_to_drop = [
 df_extracted = df_extracted.drop(*columns_to_drop)
 
 # write in s3 as parquet file
-df_extracted.write.parquet(
-    f"s3://{args['S3_BUCKET_TARGET']}/output/"
+df_extracted.write.option("ignoreDataLocality", "true").parquet(
+    f"s3://{args['S3_BUCKET_TARGET']}/output/",
+    mode='append'
 )
