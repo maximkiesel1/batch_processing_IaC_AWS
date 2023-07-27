@@ -16,8 +16,6 @@ spark = SparkSession.builder \
 # Get the Glue job arguments
 args = getResolvedOptions(sys.argv, ['S3_BUCKET_SOURCE', 'S3_BUCKET_TARGET'])
 
-print(f'S3_BUCKET_SOURCE: {args["S3_BUCKET_SOURCE"]}')
-print(f'S3_BUCKET_TARGET: {args["S3_BUCKET_TARGET"]}')
 
 # Initialize the S3 client
 s3_client = boto3.client('s3',
@@ -124,8 +122,7 @@ columns_to_drop = [
 ]
 df_extracted = df_extracted.drop(*columns_to_drop)
 
-df_extracted.write.csv(
-    f"s3://{args['S3_BUCKET_SOURCE']}/output/",
-    mode='append',
-    header=True
+# write in s3 as parquet file
+df_extracted.write.parquet(
+    f"s3://{args['S3_BUCKET_TARGET']}/output/"
 )

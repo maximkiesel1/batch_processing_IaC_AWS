@@ -1,37 +1,26 @@
 # batch_processing_IaC_AWS
 This repository includes an Infrastructure as Code (IaC) to perform batch processing of big data.
 
-## Installing and Running LocalStack
+### Scheduling a Python Script Execution Using a Bash Script and Cron
 
-LocalStack provides an easy-to-use testing and development environment for AWS cloud resources on your local machine. This guide (for `bash`) will help you install and run LocalStack.
+1. Firstly, create a bash file that runs your Python script, for instance, name it `run_python_script.sh`:
 
-### Prerequisites
+   ```bash
+   #!/bin/bash
+   /usr/bin/python3 /path/to/your/python/script.py
+   
+Please replace /path/to/your/python/script.py with the exact path to your Python file.
 
-Before you begin, make sure you have the following dependencies installed on your system:
+2. Make the bash file executable:
 
-1. **Python** (check with `python --version`)
-2. **pip** (check with `pip --version`)
-3. **Docker** (check with `docker --version`)
+   ```bash
+    chmod +x /path/to/run_python_script.sh
+   
+3. Configure cron to execute this bash file periodically. Open the crontab configuration with crontab -e and add a new line:
 
-If you don't have Docker installed, follow the installation instructions for your platform at [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/).
+   ```bash
+    0 0 1 * * /path/to/run_python_script.sh
+   
+This line schedules your script to run at 0:00 on the first day of every month. 
 
-### Installation
-
-1. Install LocalStack using pip:
-
-```
-pip install localstack
-```
-
-### Running LocalStack
-
-1. Start LocalStack with Docker:
-
-```
-localstack start
-```
-
-This command downloads the LocalStack Docker image (if not already present on your system) and starts a new LocalStack container with the default services.
-
-After installing and starting LocalStack, you can use and test various AWS services provided by LocalStack.
-
+Please note: The exact path to Python (/usr/bin/python3) may vary depending on your system. You can find out the path to your Python installation by running which python3 in your terminal.

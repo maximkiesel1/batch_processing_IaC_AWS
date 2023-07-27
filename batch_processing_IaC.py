@@ -34,19 +34,27 @@ kms_client = boto3.client('kms',
                           )
 
 
-# Create a KMS encryption
-def create_kms_key(description):
-    try:
-        response = kms_client.create_key(
-            Description=description,
-            KeyUsage='ENCRYPT_DECRYPT',
-            Origin='AWS_KMS',
-            BypassPolicyLockoutSafetyCheck=False
-        )
-        return response['KeyMetadata']['Arn']  # Return the ARN of the key
-    except Exception as e:
-        print(f"Error creating KMS key: {e}")
-        return None
+# Function to check if a KMS key with a certain description exists
+def check_kms_key(description):
+    response = kms_client.list_keys()
+    for key in response['Keys']:
+        key_metadata = kms_client.describe_key(KeyId=key['KeyArn'])
+        if 'Description' in key_metadata['KeyMetadata'] and key_metadata['KeyMetadata']['Description'] == description:
+            return key['KeyArn']
+    return None
+
+
+# Function to create a KMS key if it doesn't exist
+def create_kms_key_if_needed(description):
+    kms_key_arn = check_kms_key(description)
+    if not kms_key_arn:
+        # Create the key
+        response = kms_client.create_key(Description=description)
+        kms_key_arn = response['KeyMetadata']['Arn']
+        print(f'Created KMS key with ARN: {kms_key_arn}')
+    else:
+        print(f'Found existing KMS key with ARN: {kms_key_arn}')
+    return kms_key_arn
 
 
 # Function to attach kms policy
@@ -507,8 +515,12 @@ def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_
 
 
 # Create KMS id
-kms_key_description = 'kms-key-batch-processing'
-kms_key_arn = create_kms_key(kms_key_description)
+kms_key_description = 'test'
+kms_key_arn = create_kms_key_if_needed(kms_key_description)
+
+# store it in a configuration file
+with open('config.json', 'w') as f:
+    json.dump({'KMS_KEY_ARN': kms_key_arn}, f)
 
 security_configuration_name = "GlueSecurityConfiguration"
 create_glue_security_configuration(security_configuration_name, kms_key_arn)
@@ -607,4 +619,6 @@ rule_name = "monthly-update-cloudwatch-events-rule"
 
 # Create or update the CloudWatch event rule
 create_cloudwatch_events_rule_5(rule_name_5, state_machine_arn)
-create_cloudwatch_events_rule(rule_name, state_machine_arn)
+#create_cloudwatch_events_rule(rule_name, state_machine_arn)
+
+
