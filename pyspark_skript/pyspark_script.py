@@ -51,6 +51,7 @@ for csv_file in csv_files:
         except ValueError:
             print(f"Invalid date format in CSV file {csv_file}")
 
+
 # Read the data from the latest CSV file
 if latest_csv_file:
     df = spark.read.csv(

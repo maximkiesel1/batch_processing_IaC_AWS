@@ -40,6 +40,7 @@ sfn_client = boto3.client('stepfunctions', region_name='eu-north-1')
 # File to save the KMS key
 kms_key_file = 'config.json'
 
+
 # Function to check if a KMS key with a certain description exists
 def check_kms_key(description):
     response = kms_client.list_keys()
@@ -112,7 +113,7 @@ def create_s3_bucket(bucket_name, kms_key_id):
             )
             print(f"S3 bucket {bucket_name} created successfully")
 
-            # Activate a kms encryption
+            # Activate kms encryption
             s3_client.put_bucket_encryption(
                 Bucket=bucket_name,
                 ServerSideEncryptionConfiguration={
@@ -193,6 +194,7 @@ def create_glue_role(role_name, s3_policy_arn, service):
         print(f"Error creating IAM role {role_name}: {e}")
 
 
+# Check if security config exist
 def create_glue_security_configuration_if_not_exists(security_configuration_name, kms_key_arn):
     try:
         glue_client.get_security_configuration(Name=security_configuration_name)
@@ -280,7 +282,7 @@ def create_s3_access_policy(policy_name, bucket_names):
         return None
 
 
-# Create a Glue job with KMS encryption
+# Create Glue job with KMS encryption
 def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucket, security_configuration_name):
     glue_job = get_glue_job(job_name)
     if glue_job:
@@ -312,7 +314,6 @@ def create_glue_job(job_name, role_arn, script_path, source_bucket, target_bucke
         print(f"Error creating Glue job {job_name}: {e}")
 
 
-
 # Function to check if there is an exisiting glue job
 def get_glue_job(job_name):
     try:
@@ -325,7 +326,7 @@ def get_glue_job(job_name):
             raise e
 
 
-# Create a state machine for AWS Step Functions
+# Create state machine for AWS Step Functions
 def create_state_machine(state_machine_name, role_arn, definition):
     state_machine_arn = does_state_machine_exist(state_machine_name)
     if not state_machine_arn:
@@ -351,6 +352,7 @@ def create_state_machine(state_machine_name, role_arn, definition):
         return state_machine_arn
 
 
+# Function to check if state machine exist
 def does_state_machine_exist(state_machine_name):
     try:
         state_machines = sfn_client.list_state_machines()['stateMachines']
@@ -377,7 +379,7 @@ def add_inline_policy_to_role(role_name, policy_name, policy_document):
 
 
 # Create a CloudWatch Events rule to trigger the state machine execution monthly
-def create_cloudwatch_events_rule(rule_name, state_machine_arn):
+def create_cloudwatch_events_rule_monthly(rule_name, state_machine_arn):
     try:
         # Create or update a CloudWatch Events rule with a cron schedule expression
         # This rule triggers every month
@@ -431,6 +433,7 @@ def create_cloudwatch_events_rule(rule_name, state_machine_arn):
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
 
 
+# Check if inline policy exist
 def does_inline_policy_exist(role_name, policy_name):
     try:
         response = iam_client.list_role_policies(RoleName=role_name)
@@ -444,7 +447,7 @@ def does_inline_policy_exist(role_name, policy_name):
 
 
 # Create cloudwatch event rule clocked in 5 minutes for testing
-def create_cloudwatch_events_rule_5(rule_name, state_machine_arn):
+def create_cloudwatch_events_rule_5min(rule_name, state_machine_arn):
     try:
         # Create or update a CloudWatch Events rule with a cron schedule expression
         # This rule triggers every 5 minutes
@@ -477,7 +480,7 @@ def create_cloudwatch_events_rule_5(rule_name, state_machine_arn):
                     {
                         "Effect": "Allow",
                         "Action": "states:StartExecution",
-                        "Resource": state_machine_arn  # The ARN of the state machine
+                        "Resource": state_machine_arn
                     }
                 ]
             }
@@ -503,7 +506,6 @@ def create_cloudwatch_events_rule_5(rule_name, state_machine_arn):
         return rule_arn
     except ClientError as e:
         print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
-
 
 
 # create cloudwatch event role
@@ -544,15 +546,16 @@ def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_
                 PolicyDocument=json.dumps(execution_policy)
             )
 
-            print(f"IAM-Rolle {role_name} erfolgreich erstellt")
+            print(f"IAM role {role_name} successfully created")
             return response['Role']['Arn']
         except ClientError as e:
-            print(f"Fehler beim Erstellen der IAM-Rolle {role_name}: {e}")
+            print(f"Error creating IAM role {role_name}: {e}")
     else:
-        print(f"IAM-Rolle {role_name} existiert bereits")
+        print(f"IAM role {role_name} already exists")
         return role_arn
 
 
+# Check if Cloudwatch Event exist
 def does_cloudwatch_rule_exist(rule_name):
     try:
         response = events_client.describe_rule(Name=rule_name)
@@ -575,13 +578,17 @@ else:
     kms_key_description = 'batch_processing_1'
     kms_key_arn = create_kms_key_if_needed(kms_key_description)
 
+
+# Create Glue security config
 security_configuration_name = "GlueSecurityConfiguration"
 create_glue_security_configuration_if_not_exists(security_configuration_name, kms_key_arn)
+
 
 # Create S3 buckets
 create_s3_bucket('data-ingestion-bucket-kiesel', kms_key_arn)  # Bucket for data ingestion
 create_s3_bucket('pyspark-skript-bucket-kiesel', kms_key_arn)  # Bucket for PySpark script
 create_s3_bucket('processing-bucket-kiesel', kms_key_arn)  # Bucket for processing
+
 
 # Check if the S3 access policy exists, otherwise create one
 s3_policy_name = 'S3AccessPolicy'
@@ -591,10 +598,12 @@ bucket_names = [
     'processing-bucket-kiesel'
 ]
 
+
 # Try to get the ARN of the S3 policy if it exists, otherwise create a new one
 s3_policy_arn = does_s3_policy_exist(s3_policy_name)
 if s3_policy_arn is None:
     s3_policy_arn = create_s3_access_policy(s3_policy_name, bucket_names)
+
 
 # If the S3 policy was found or created successfully, try to create the IAM role
 if s3_policy_arn is not None:
@@ -607,6 +616,7 @@ if s3_policy_arn is not None:
 else:
     print(f"Failed to create or find the S3 access policy {s3_policy_name}.")
 
+
 # Try to create the AWS Glue job if the IAM role was created successfully
 if 'glue_role_arn' in locals():
     create_glue_job(
@@ -618,9 +628,11 @@ if 'glue_role_arn' in locals():
         security_configuration_name
     )
 
+
 # Create an IAM role for AWS Step Functions if it doesn't exist
 step_functions_role_name = 'processing-step-functions-role'
 step_functions_role_arn = does_iam_role_exist(step_functions_role_name)
+
 if step_functions_role_arn is None:
     step_functions_policy_arn = 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
     step_functions_role_arn = create_glue_role(step_functions_role_name, step_functions_policy_arn, "states.amazonaws.com")
@@ -631,9 +643,11 @@ if step_functions_role_arn is None:
 else:
     print(f"IAM role {step_functions_role_name} already exists")
 
+
 # Create state machine if it doesn't exist
 state_machine_name = "processing-step-functions"
 state_machine_arn = does_state_machine_exist(state_machine_name)
+
 if state_machine_arn is None:
     role_arn = step_functions_role_arn
     definition = """
@@ -656,9 +670,11 @@ if state_machine_arn is None:
 else:
     print(f"State machine {state_machine_name} already exists")
 
+
 # Create an IAM role for CloudWatch Events if it doesn't exist
 cloudwatch_events_role_name = 'cloudwatch-events-processing-role'
 cloudwatch_events_role_arn = does_iam_role_exist(cloudwatch_events_role_name)
+
 if cloudwatch_events_role_arn is None:
     cloudwatch_events_role_arn = create_cloudwatch_events_role(
         cloudwatch_events_role_name,
@@ -669,6 +685,7 @@ if cloudwatch_events_role_arn is None:
     attach_kms_policy_to_role(cloudwatch_events_role_name, kms_key_arn)
 else:
     print(f"IAM role {cloudwatch_events_role_name} already exists")
+
 
 # Add inline policy to the role that allows it to start executions of the state machine
 policy_name = 'StartExecutionPolicy'
@@ -682,6 +699,7 @@ policy_document = {
         }
     ]
 }
+
 if not does_inline_policy_exist(cloudwatch_events_role_name, policy_name):
     add_inline_policy_to_role(cloudwatch_events_role_name, policy_name, policy_document)
 else:
@@ -692,7 +710,7 @@ else:
 rule_name_5 = "5min-update-cloudwatch-events-rule"
 rule_arn_5 = does_cloudwatch_rule_exist(rule_name_5)
 if rule_arn_5 is None:
-    create_cloudwatch_events_rule_5(rule_name_5, state_machine_arn)
+    create_cloudwatch_events_rule_5min(rule_name_5, state_machine_arn)
 else:
     print(f"CloudWatch rule {rule_name_5} already exists")
 
