@@ -7,7 +7,7 @@ This robust design is a key feature of the infrastructure that greatly enhances 
 ## 1. Ingestion Layer
 ### Scheduling a Upload Script for S3 Execution Using a Bash Script and Cron
 
-In terms of data upload, the Python script ('upload_csv_to_s3.py'), which is triggered by the bash script scheduled by cron, is designed to automatically select the most recent measurement data for each execution. This ensures that the newest data is always migrated to the cloud, keeping the AWS S3 bucket up-to-date with the latest temperature sensor readings.
+In terms of data upload, the Python script (`upload_csv_to_s3.py`), which is triggered by the bash script scheduled by cron, is designed to automatically select the most recent measurement data for each execution. This ensures that the newest data is always migrated to the cloud, keeping the AWS S3 bucket up-to-date with the latest temperature sensor readings.
 
 1. Firstly, create a bash file that runs the script:
 
@@ -29,10 +29,10 @@ Please replace /path/to/your/python/script with the exact path to the upload pyt
    
 This line schedules your script to run at 0:00 on the first day of every month. 
 
-Please note: The exact path to Python (/usr/bin/python3) may vary depending on your system. You can find out the path to your Python installation by running which python3 in your terminal.
+Please note: The exact path to Python (`/usr/bin/python3`) may vary depending on your system. You can find out the path to your Python installation by running which python3 in your terminal.
 
 ## 2. Storage/Processing Layer
-The second layer is the Storage/Processing Layer. Here, the CSV file is stored in an AWS S3 bucket. Then, the data are processed using AWS Glue, a fully managed Extract-Transform-Load (ETL) service. The separate PySpark script 'pyspark_skript' (stored in an S3 bucket) is utilized for ETL processing, allowing for flexible and scalable data transformations. The processed data are subsequently stored back in an S3 bucket as a Parquet file to be used for a machine learning application. During processing, the data are converted into a time-series format.
+The second layer is the Storage/Processing Layer. Here, the CSV file is stored in an AWS S3 bucket. Then, the data are processed using AWS Glue, a fully managed Extract-Transform-Load (ETL) service. The separate PySpark script `pyspark_skript` (stored in an S3 bucket) is utilized for ETL processing, allowing for flexible and scalable data transformations. The processed data are subsequently stored back in an S3 bucket as a Parquet file to be used for a machine learning application. During processing, the data are converted into a time-series format.
 AWS Glue job for time series transformation is programmed to process the latest measurement data available in the S3 bucket.
 
 ## 3. Orchestration
