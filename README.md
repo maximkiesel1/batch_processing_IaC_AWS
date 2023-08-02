@@ -1,5 +1,5 @@
-# batch_processing_IaC_AWS
-![Uploading karosu-RIQdGGU2US0-unsplash.jpg…]()
+# Batch processing pipeline on AWS as Infrastructure as Code
+![karosu-RIQdGGU2US0-unsplash](https://github.com/maximkiesel1/batch_processing_IaC_AWS/assets/119667336/a04806c5-e496-470e-a416-950eebfa480d)
 
 This repository includes an Infrastructure as Code (IaC) to perform batch processing of big data.
 The entire pipeline is designed with idempotency in mind, meaning it can be executed multiple times without causing disruptions or inconsistencies in the data processing. This is especially valuable as it not only ensures reliability and fault-tolerance of the system but also offers the flexibility of rerunning the pipeline whenever needed. Thus, even if the pipeline execution is repeated, it won't duplicate data or cause errors, but will always ensure that the most recent measurement data is correctly processed and stored for subsequent use.
