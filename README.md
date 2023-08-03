@@ -17,7 +17,7 @@ In terms of data upload, the Python script (`upload_csv_to_s3.py`), which is tri
    #!/bin/bash
    /usr/bin/python3 /path/to/your/python/script/upload_csv_to_s3.py
    
-Please replace /path/to/your/python/script with the exact path to the upload python file.
+Please replace `/path/to/your/python/script` with the exact path to the upload Python file.
 
 2. Make the bash file executable:
 
