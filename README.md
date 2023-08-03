@@ -24,17 +24,17 @@ Please replace `/path/to/your/python/script` with the exact path to the upload P
    ```bash
     chmod +x /path/to/your/python/script/upload_csv_to_s3.py
    
-3. Configure cron to execute this bash file periodically. Open the crontab configuration with crontab -e and add a new line:
+3. Configure cron to execute this bash file periodically. Open the `crontab` configuration with `crontab -e` and add a new line:
 
    ```bash
     0 0 1 * * /path/to/your/python/script/upload_csv_to_s3.py
    
-This line schedules your script to run at 0:00 on the first day of every month. 
+This line schedules your script to run at `0:00` on the first day of every month. 
 
 Please note: The exact path to Python (`/usr/bin/python3`) may vary depending on your system. You can find out the path to your Python installation by running which `python3` in your terminal.
 
 ## 2. Storage/Processing Layer
-The second layer is the Storage/Processing Layer. Here, the CSV file is stored in an `AWS S3 Bucket?. Then, the data are processed using `AWS Glue`, a fully managed Extract-Transform-Load (ETL) service. The separate PySpark script `pyspark_skript.py` (stored in an `S3 Bucket`) is utilized for ETL processing, allowing for flexible and scalable data transformations. The processed data are subsequently stored back in an `S3 Bucket` as a Parquet file to be used for a machine learning application. During processing, the data are converted into a time-series format.
+The second layer is the Storage/Processing Layer. Here, the CSV file is stored in an `AWS S3 Bucket`. Then, the data are processed using `AWS Glue`, a fully managed Extract-Transform-Load (ETL) service. The separate PySpark script `pyspark_skript.py` (stored in an `S3 Bucket`) is utilized for ETL processing, allowing for flexible and scalable data transformations. The processed data are subsequently stored back in an `S3 Bucket` as a Parquet file to be used for a machine learning application. During processing, the data are converted into a time-series format.
 `AWS Glue Job` for time series transformation is programmed to process the latest measurement data available in the `S3 Bucket`.
 
 ## 3. Orchestration
