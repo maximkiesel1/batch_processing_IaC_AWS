@@ -38,7 +38,7 @@ The second layer is the Storage/Processing Layer. Here, the CSV file is stored i
 AWS Glue job for time series transformation is programmed to process the latest measurement data available in the S3 bucket.
 
 ## 3. Orchestration
-The orchestration of the entire process is handled with AWS Step Functions and CloudWatch. Step Functions provide a serverless workflow orchestration service, enabling the coordination and sequencing of various AWS services. This results in high availability of the architecture, as failed workflows can be retried, or alternative paths can be defined. CloudWatch is used for scheduling the process, ensuring that the workflow is triggered monthly as per requirements.
+For orchestrating the AWS Glue job, AWS Step Functions is employed. This allows for managing the sequence and coordination of the data processing tasks. A CloudWatch event is set up to trigger this orchestrated process on a monthly basis. This mechanism ensures that the Glue job is executed regularly and seamlessly, enhancing the overall efficiency of the data processing pipeline.
 
 ## 4. Data Security
 For data security, AWS IAM (Identity and Access Management) and AWS KMS (Key Management Service) are used. IAM is employed to control and restrict access to AWS resources, ensuring only authorized users or services can access data and services. KMS is used for data encryption, providing an additional layer of protection for sensitive information.

@@ -46,4 +46,4 @@ def data_ingestion(folder_path, s3_bucket_name, kms_key_id):
         print("No valid CSV files found in the folder")
 
 # Upload the latest local CSV file to the input S3 bucket
-data_ingestion('/Users/maximkiesel/batch_processing_IaC_AWS/data/', 'data-ingestion-bucket-kiesel', kms_key_arn)
+data_ingestion('/Users/maximkiesel/PycharmProjects/batch_processing_IaC_AWS/data', 'data-ingestion-bucket-kiesel', kms_key_arn)
