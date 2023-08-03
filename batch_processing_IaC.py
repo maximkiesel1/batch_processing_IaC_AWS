@@ -575,7 +575,7 @@ if os.path.exists(kms_key_file):
         print(f'Loaded KMS key ARN from {kms_key_file}: {kms_key_arn}')
 else:
     # Create KMS key if needed
-    kms_key_description = 'batch_processing_1'
+    kms_key_description = 'batch_processing_x'
     kms_key_arn = create_kms_key_if_needed(kms_key_description)
 
 
