@@ -23,6 +23,10 @@ To use and deploy the Infrastructure as Code (`IAC`) structures contained in thi
 
 4. **Configuring the AWS CLI**:
 - If you haven't already, install the `AWS CLI`. 
+   ```bash
+   #!/bin/bash
+   pip install awscli
+
 - Configure the `CLI` by running `aws configure` in your terminal. This command prompts you to provide the `Access Key ID`, `Secret Access Key`, `default region`, and `default output format`.
 
 5. **Configuring boto3**:
