@@ -5,19 +5,18 @@ import boto3
 from botocore.exceptions import ClientError
 import json
 
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# get the kms key arn from the configuration file
-with open('config.json', 'r') as f:
+# Load the kms key arn and other configurations from the configuration file
+with open(os.path.join(script_dir, 'config.json'), 'r') as f:
     config = json.load(f)
 
 kms_key_arn = config.get('KMS_KEY_ARN')
+s3_bucket_name = config.get('S3_BUCKET_NAME', 'data-ingestion-bucket-kiesel')  # Default value if not in config
 
-s3_client = boto3.client('s3',
-                         region_name="eu-north-1"
-                         )
+s3_client = boto3.client('s3', region_name="eu-north-1")
 
-
-# Function to upload the latest CSV file from a folder to an S3 bucket
 def data_ingestion(folder_path, s3_bucket_name, kms_key_id):
     csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
     latest_date = None
@@ -45,5 +44,8 @@ def data_ingestion(folder_path, s3_bucket_name, kms_key_id):
     else:
         print("No valid CSV files found in the folder")
 
+# Use a relative path for the data directory
+data_dir = os.path.join(script_dir, 'data')
+
 # Upload the latest local CSV file to the input S3 bucket
-data_ingestion('/Users/maximkiesel/PycharmProjects/batch_processing_IaC_AWS/data', 'data-ingestion-bucket-kiesel', kms_key_arn)
+data_ingestion(data_dir, s3_bucket_name, kms_key_arn)
