@@ -5,7 +5,49 @@ This repository includes an Infrastructure as Code (`IaC`) to perform batch proc
 The entire pipeline is designed with idempotency in mind, meaning it can be executed multiple times without causing disruptions or inconsistencies in the data processing. This is especially valuable as it not only ensures reliability and fault-tolerance of the system but also offers the flexibility of rerunning the pipeline whenever needed. Thus, even if the pipeline execution is repeated, it won't duplicate data or cause errors, but will always ensure that the most recent measurement data is correctly processed and stored for subsequent use.
 This robust design is a key feature of the infrastructure that greatly enhances its resilience, making it well suited for production environments and critical applications.
 
-    
+## Setting Up AWS Credentials for Using This IAC Repository with boto3
+To use and deploy the Infrastructure as Code (IAC) structures contained in this repository, it's crucial to have valid AWS credentials configured. Here's a step-by-step guide:
+
+1. **AWS Account**: If you haven't already, sign up for an AWS account on the AWS Management Console.
+
+2. **IAM User Creation**: 
+- Navigate to the Identity and Access Management (IAM) dashboard.
+- Create a new IAM user. 
+- It's a best practice not to use your AWS root account for programmatic activities. 
+- Grant the user appropriate permissions. For initial testing, you can grant AdministratorAccess but consider limiting permissions for production uses.
+
+3. **Access Keys**: 
+- Once the IAM user is created, generate the Access Key ID and Secret Access Key. 
+- Store these keys in a safe and secure place. AWS only shows the secret key once, and it cannot be retrieved again.
+
+4. **Configuring the AWS CLI**:
+- If you haven't already, install the AWS CLI. 
+- Configure the CLI by running aws configure in your terminal. This command prompts you to provide the Access Key ID, Secret Access Key, default region, and default output format.
+
+5. **Configuring boto3**:
+- boto3 will automatically use the credentials stored from the AWS CLI. 
+- Alternatively, you can manually configure credentials in Python scripts:
+
+```
+import boto3
+session = boto3.Session(
+    aws_access_key_id='YOUR_ACCESS_KEY',
+    aws_secret_access_key='YOUR_SECRET_KEY',
+    region_name='YOUR_REGION_NAME'
+)
+```
+
+6. **Using Profiles**:
+- For managing multiple AWS accounts or roles, consider using named profiles. 
+- You can set these up during aws configure by using the --profile flag, e.g., aws configure --profile myprofile. 
+- In boto3, you can then reference these named profiles:
+
+```
+session = boto3.Session(profile_name='myprofile')
+```
+
+By ensuring that your AWS credentials are set up properly and securely, you'll be prepared to execute the IAC code in this repository effectively and safely.
+
 ## 1. Ingestion Layer
 ### Scheduling a Upload Script for S3 Execution Using a Bash Script and Cron
 
