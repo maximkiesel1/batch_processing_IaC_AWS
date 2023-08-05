@@ -24,7 +24,6 @@ To use and deploy the Infrastructure as Code (`IAC`) structures contained in thi
 4. **Configuring the AWS CLI**:
 - If you haven't already, install the `AWS CLI`. 
    ```bash
-   #!/bin/bash
    pip install awscli
 
 - Configure the `CLI` by running `aws configure` in your terminal. This command prompts you to provide the `Access Key ID`, `Secret Access Key`, `default region`, and `default output format`.
@@ -61,7 +60,6 @@ In terms of data upload, the Python script (`upload_csv_to_s3.py`), which is tri
 1. Firstly, create a bash file that runs the script:
 
    ```bash
-   #!/bin/bash
    /usr/bin/python3 /path/to/your/python/script/upload_csv_to_s3.py
    
 Please replace `/path/to/your/python/script` with the exact path to the upload Python file.
