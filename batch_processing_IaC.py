@@ -509,34 +509,27 @@ def create_cloudwatch_events_rule_5min(rule_name, state_machine_arn):
 
 
 # create cloudwatch event role
-def create_cloudwatch_events_rule_monthly(rule_name, state_machine_arn):
-    try:
-        # Create or update a CloudWatch Events rule with a cron schedule expression
-        # This rule triggers every month at 00:10 on the first day of the month
-        response = events_client.put_rule(
-            Name=rule_name,
-            ScheduleExpression='cron(10 0 1 * ? *)',
-            State='ENABLED'
-        )
-        # Extract the ARN of the created rule
-        rule_arn = response['RuleArn']
-        print(f"CloudWatch Events rule {rule_name} created successfully")
-
-        # Create an IAM role for CloudWatch Events if it doesn't exist
-        cloudwatch_events_role_arn = does_iam_role_exist('cloudwatch-events-processing-role')
-        if not cloudwatch_events_role_arn:
-            cloudwatch_events_role_arn = create_glue_role(
-                'cloudwatch-events-processing-role',
-                'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess',
-                'events.amazonaws.com'
+def create_cloudwatch_events_role(role_name, policy_arn, service, state_machine_arn):
+    role_arn = does_iam_role_exist(role_name)
+    if not role_arn:
+        try:
+            trust_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Service": service},
+                        "Action": "sts:AssumeRole"
+                    }
+                ]
+            }
+            response = iam_client.create_role(
+                RoleName=role_name,
+                AssumeRolePolicyDocument=json.dumps(trust_policy),
             )
-        else:
-            print(f"IAM role cloudwatch-events-processing-role already exists")
+            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
 
-        # Add inline policy to the role that allows it to start executions of the state machine
-        policy_name = 'StartExecutionPolicy'
-        if not does_inline_policy_exist('cloudwatch-events-processing-role', policy_name):
-            policy_document = {
+            execution_policy = {
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -546,28 +539,20 @@ def create_cloudwatch_events_rule_monthly(rule_name, state_machine_arn):
                     }
                 ]
             }
-            add_inline_policy_to_role('cloudwatch-events-processing-role', policy_name, policy_document)
-        else:
-            print(f"Inline policy {policy_name} already exists")
 
-        # Add the State Machine as a target for the rule
-        # This means every time the rule triggers, it will start an execution of the state machine
-        events_client.put_targets(
-            Rule=rule_name,
-            Targets=[
-                {
-                    'Id': '1',
-                    'Arn': state_machine_arn,
-                    'RoleArn': cloudwatch_events_role_arn
-                }
-            ]
-        )
-        print(f"State machine {state_machine_arn} added as a target for the rule {rule_name}")
+            iam_client.put_role_policy(
+                RoleName=role_name,
+                PolicyName='StartExecutionToStepFunctions',
+                PolicyDocument=json.dumps(execution_policy)
+            )
 
-        # Return the ARN of the created rule
-        return rule_arn
-    except ClientError as e:
-        print(f"Error creating CloudWatch Events rule {rule_name}: {e}")
+            print(f"IAM role {role_name} successfully created")
+            return response['Role']['Arn']
+        except ClientError as e:
+            print(f"Error creating IAM role {role_name}: {e}")
+    else:
+        print(f"IAM role {role_name} already exists")
+        return role_arn
 
 
 # Check if Cloudwatch Event exist
@@ -722,7 +707,7 @@ else:
 
 
 # Create or update the CloudWatch event rule if it doesn't exist
-rule_name = "cloudwatch-events-rule"
+rule_name = "cloudwatch-events-rule-monthly"
 rule_arn = does_cloudwatch_rule_exist(rule_name)
 if rule_arn is None:
     create_cloudwatch_events_rule_monthly(rule_name, state_machine_arn)
