@@ -1,7 +1,7 @@
 # Batch processing pipeline on AWS as Infrastructure as Code
 ![karosu-RIQdGGU2US0-unsplash](https://github.com/maximkiesel1/batch_processing_IaC_AWS/assets/119667336/a04806c5-e496-470e-a416-950eebfa480d)
 
-This repository includes an Infrastructure as Code (`IAC`) to perform batch processing of big data (sensor data) in AWS.
+This repository includes an Infrastructure as Code (`IAC`) to perform batch processing of big data in AWS.
 <img width="570" alt="Bildschirmfoto 2023-08-11 um 18 15 22" src="https://github.com/maximkiesel1/batch_processing_IaC_AWS/assets/119667336/574b3aea-66d5-434d-9e9b-9fb319e4e550">
 
 The concept presented is based on an ecosystem in AWS and is implemented using Python and boto3 for `IAC` development to ensure maintainability of the architecture.
